@@ -1,5 +1,6 @@
 package nl.enjarai.wonkyblock.compat.sodium;
 
+import me.jellysquid.mods.sodium.client.render.SodiumWorldRenderer;
 import net.minecraft.block.BlockState;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.VertexConsumer;

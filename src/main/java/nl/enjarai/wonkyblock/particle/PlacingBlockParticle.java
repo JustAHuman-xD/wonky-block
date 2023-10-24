@@ -20,46 +20,40 @@ import nl.enjarai.wonkyblock.util.RendererImplementation;
 import java.util.Random;
 
 public class PlacingBlockParticle extends Particle {
-    private static final Random RANDOM = new Random();
-    private static final net.minecraft.util.math.random.Random MC_RANDOM = net.minecraft.util.math.random.Random.create();
+    private static final Random JAVA_RANDOM = new Random();
 
-    public BlockPos pos;
+    private final MinecraftClient client;
 
-    Block block;
-    BlockState blockState;
+    private final BlockPos pos;
+    private final Block block;
+    private final BlockState blockState;
+    private final BlockEntity tileEntity;
 
-    RendererImplementation renderer;
+    private final RendererImplementation renderer;
+    private final BakedModel model;
+    private final Direction facing;
 
-    BakedModel model;
+    private Vec3d prevRot;
+    private Vec3d rot;
 
-    MinecraftClient client;
+    private final boolean lookingUp;
+    private final float startingHeight;
+    private final float startingAngle;
 
-    Direction facing;
+    private float height;
+    private float prevHeight;
+    private float smoothHeight;
+    private boolean inPosition = false;
 
-    Vec3d prevRot;
-    Vec3d rot;
-
-    float startingHeight;
-    float startingAngle;
-    float step = 0.00275f;
-
-    float height;
-    float prevHeight;
-
-    float smoothHeight;
-
-    boolean lookingUp;
-    long tick = -1;
-    boolean inPosition = false;
-
-    BlockEntity tileEntity;
+    private long tick = -1;
+    private float step = 0.00275f;
 
     public static class Factory implements ParticleFactory<DefaultParticleType> {
         @Override
         public Particle createParticle(DefaultParticleType type, ClientWorld world, double x, double y, double z, double vx, double vy, double vz) {
             return new PlacingBlockParticle(
                     world, x, y, z,
-                    world.getBlockState(new BlockPos(x, y, z))
+                    world.getBlockState(new BlockPos((int) x, (int) y, (int) z))
             );
         }
     }
@@ -67,7 +61,7 @@ public class PlacingBlockParticle extends Particle {
     public PlacingBlockParticle(ClientWorld world, double x, double y, double z, BlockState state) {
         super(world, x, y, z);
 
-        pos = new BlockPos(x, y, z);
+        pos = new BlockPos((int) x, (int) y, (int) z);
 
         client = MinecraftClient.getInstance();
 
@@ -76,8 +70,8 @@ public class PlacingBlockParticle extends Particle {
 
         lookingUp = MathHelper.wrapDegrees(client.player.getPitch()) <= 0;
 
-        prevHeight = height = startingHeight = (float) RANDOM.nextDouble(0.065, 0.115);
-        startingAngle = (float) RANDOM.nextDouble(0.03125, 0.0635);
+        prevHeight = height = startingHeight = (float) JAVA_RANDOM.nextDouble(0.065, 0.115);
+        startingAngle = (float) JAVA_RANDOM.nextDouble(0.03125, 0.0635);
 
         prevRot = new Vec3d(0, 0, 0);
 
@@ -89,7 +83,8 @@ public class PlacingBlockParticle extends Particle {
             default -> new Vec3d(0, 0, 0);
         };
 
-        block = (blockState = state).getBlock();
+        blockState = state;
+        block = blockState.getBlock();
 
         renderer = WonkyBlock.getRenderer();
 
@@ -156,8 +151,9 @@ public class PlacingBlockParticle extends Particle {
 
         smoothHeight = ((float) (prevHeight + (height - prevHeight) * (double) delta));
 
-        if (smoothHeight <= 0)
+        if (smoothHeight <= 0) {
             smoothHeight = 0;
+        }
 
         var tRot = switch (facing) {
             case EAST -> new Vec3d(1, 0, -1);
@@ -177,14 +173,14 @@ public class PlacingBlockParticle extends Particle {
 
         var smoothRot = prevRot.lerp(rot, delta);
         switch (facing) {
-            case EAST -> {
-                if (smoothRot.z > 0) {
+            case NORTH, WEST -> {
+                if (smoothRot.z < 0) {
                     inPosition = true;
                     smoothRot = new Vec3d(0, smoothRot.getY(), 0);
                 }
             }
-            case NORTH -> {
-                if (smoothRot.z < 0) {
+            case EAST -> {
+                if (smoothRot.z > 0) {
                     inPosition = true;
                     smoothRot = new Vec3d(0, smoothRot.getY(), 0);
                 }
@@ -195,128 +191,42 @@ public class PlacingBlockParticle extends Particle {
                     smoothRot = new Vec3d(0, smoothRot.getY(), 0);
                 }
             }
-            case WEST -> {
-                if (smoothRot.z < 0) {
-                    inPosition = true;
-                    smoothRot = new Vec3d(0, smoothRot.getY(), 0);
-                }
-            }
+            default -> {}
         }
 
-//        if (FBP.spawnPlaceParticles && canCollide && tick == 0) {
-//            if ((!(FBP.frozen && !FBP.spawnWhileFrozen)
-//                    && (FBP.spawnRedstoneBlockParticles || block != Blocks.REDSTONE_BLOCK))
-//                    && client.gameSettings.particleSetting < 2) {
-////                spawnParticles();
-//            }
-//        }
+        RenderLayer renderLayer = RenderLayers.getMovingBlockLayer(blockState);
+        VertexConsumer blockVertexConsumer = client.getBufferBuilders().getEntityVertexConsumers().getBuffer(renderLayer);
+        MatrixStack matrices = new MatrixStack();
 
-//        var buff = (BufferBuilder) vertexConsumer;
-        var renderLayer = RenderLayers.getMovingBlockLayer(blockState);
-        var blockVertexConsumer =
-                client.getBufferBuilders().getEntityVertexConsumers().getBuffer(renderLayer);
-        var matrices = new MatrixStack();
-
-//        matrices.multiply(camera.getRotation());
-        var cameraPos = camera.getPos();
+        Vec3d cameraPos = camera.getPos();
         matrices.translate(-cameraPos.getX(), -cameraPos.getY(), -cameraPos.getZ());
-//        matrices.multiplyPositionMatrix(MixinHooks.particleMatrixStack.peek().getPositionMatrix());
-//        var matrices = MixinHooks.particleMatrixStack;
 
         matrices.push();
-//        matrices.translate(-pos.getX(), -pos.getY(), -pos.getZ());
-//        buff.setTranslation(-pos.getX(), -pos.getY(), -pos.getZ());
-//
-//        Tessellator.getInstance().draw();
-//        RenderSystem.bindTexture(TextureMap.LOCATION_BLOCKS_TEXTURE);
-//        RenderSystem.setShaderTexture(0, PlayerScreenHandler.BLOCK_ATLAS_TEXTURE);
-//        blockVertexConsumer.begin(VertexFormat.DrawMode.QUADS, VertexFormats.POSITION_COLOR_TEXTURE_LIGHT_NORMAL);
-
-//        RenderSystem.pushMatrix();
-//        matrices.push();
 
         RenderSystem.enableCull();
-//        RenderSystem.enableColorMaterial();
-//        GL11.glColorMaterial(GL11.GL_FRONT, GL11.GL_AMBIENT_AND_DIFFUSE);
 
         matrices.translate(0.5, 0.5, 0.5);
         matrices.translate(deltaX, deltaY, deltaZ);
 
         matrices.translate(tRot.x, tRot.y, tRot.z);
 //
-        matrices.multiply(Vec3f.POSITIVE_X.getRadialQuaternion((float) smoothRot.x));
-        matrices.multiply(Vec3f.POSITIVE_Z.getRadialQuaternion((float) smoothRot.z));
+        matrices.multiply(RotationAxis.POSITIVE_X.rotation((float) smoothRot.x));
+        matrices.multiply(RotationAxis.POSITIVE_Z.rotation((float) smoothRot.z));
 //
         matrices.translate(-tRot.x, -tRot.y, -tRot.z);
         matrices.translate(t.x, t.y, t.z);
 
-        renderer.renderBlock(world, model, blockState, pos, matrices, blockVertexConsumer, false, MC_RANDOM, blockState.getRenderingSeed(pos));
+        renderer.renderBlock(world, model, blockState, pos, matrices, blockVertexConsumer, false, random, blockState.getRenderingSeed(pos));
 
-        //        if (FBP.animSmoothLighting)
-//            modelRenderer.renderSmooth(client.world, model, blockState, pos, buff, false, textureSeed);
-//        else
-//            modelRenderer.renderFlat(client.world, model, blockState, pos, buff, false, textureSeed);
-
-//        buff.setTranslation(0, 0, 0);
-
-//        Tessellator.getInstance().draw();
-//        GlStateManager.popMatrix();
-//        matrices.pop();
         matrices.pop();
 
         client.getBufferBuilders().getEntityVertexConsumers().draw();
-//        client.getTextureManager().bindTexture(FBP.LOCATION_PARTICLE_TEXTURE);
-//        buff.begin(7, DefaultVertexFormats.PARTICLE_POSITION_TEX_COLOR_LMAP);
     }
 
     @Override
     public ParticleTextureSheet getType() {
         return ParticleTextureSheet.CUSTOM;
     }
-
-//    private void spawnParticles() {
-//        if (client.world.getBlockState(pos.offset(EnumFacing.DOWN)).getBlock() instanceof BlockAir)
-//            return;
-//
-//        AxisAlignedBB aabb = block.getSelectedBoundingBox(blockState, client.world, pos);
-//
-//        // z- = north
-//        // x- = west // block pos
-//
-//        Vector2d[] corners = new Vector2d[]{new Vector2d(aabb.minX, aabb.minZ), new Vector2d(aabb.maxX, aabb.maxZ),
-//
-//                new Vector2d(aabb.minX, aabb.maxZ), new Vector2d(aabb.maxX, aabb.minZ)};
-//
-//        Vector2d middle = new Vector2d(pos.getX() + 0.5f, pos.getZ() + 0.5f);
-//
-//        for (Vector2d corner : corners) {
-//            double mX = middle.x - corner.x;
-//            double mZ = middle.y - corner.y;
-//
-//            mX /= -0.5;
-//            mZ /= -0.5;
-//
-//            client.effectRenderer.addEffect(new FBPParticleDigging(client.world, corner.x, pos.getY() + 0.1f, corner.y, mX, 0,
-//                    mZ, 0.6f, 1, 1, 1, block.getActualState(blockState, client.world, pos), null, this.particleTexture)
-//                    .multipleParticleScaleBy(0.5f).multiplyVelocity(0.5f));
-//        }
-//
-//        for (Vector2d corner : corners) {
-//            if (corner == null)
-//                continue;
-//
-//            double mX = middle.x - corner.x;
-//            double mZ = middle.y - corner.y;
-//
-//            mX /= -0.45;
-//            mZ /= -0.45;
-//
-//            client.effectRenderer.addEffect(
-//                    new FBPParticleDigging(client.world, corner.x, pos.getY() + 0.1f, corner.y, mX / 3, 0, mZ / 3, 0.6f, 1,
-//                            1, 1, block.getActualState(blockState, client.world, pos), null, this.particleTexture)
-//                            .multipleParticleScaleBy(0.75f).multiplyVelocity(0.75f));
-//        }
-//    }
 
     public void killParticle() {
         dead = true;
