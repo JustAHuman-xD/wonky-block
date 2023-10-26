@@ -8,7 +8,8 @@
   ],
   "client": [
     "BlockRendererMixin",
-    "ChunkRenderRebuildTaskMixin"
+    "ChunkRenderRebuildTaskMixin",
+    "ChunkBuilderMeshingTaskMixin"
   ],
   "injectors": {
     "defaultRequire": 1

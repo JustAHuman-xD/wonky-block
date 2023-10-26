@@ -8,7 +8,8 @@
   "client": [
     "BlockItemMixin",
     "BlockMixin",
-    "RebuildTaskMixin"
+    "RebuildTaskMixin",
+    "BakedModelManagerMixin"
   ],
   "injectors": {
     "defaultRequire": 1

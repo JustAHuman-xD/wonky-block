@@ -2,10 +2,13 @@ package nl.enjarai.wonkyblock;
 
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.api.ModInitializer;
-import net.fabricmc.loader.api.FabricLoader;
+import net.fabricmc.fabric.impl.client.model.loading.ModelLoadingPluginManager;
+import net.minecraft.client.render.block.BlockModels;
+import net.minecraft.client.render.model.BakedModel;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.Registry;
-import nl.enjarai.wonkyblock.compat.sodium.SodiumRendererImplementation;
+import nl.enjarai.wonkyblock.accessor.BakedModelManagerAccess;
+import nl.enjarai.wonkyblock.client.WonkyBlockModelLoadingPlugin;
 import nl.enjarai.wonkyblock.particle.PlacingBlockParticle;
 import net.fabricmc.fabric.api.client.particle.v1.ParticleFactoryRegistry;
 import net.fabricmc.fabric.api.particle.v1.FabricParticleTypes;
@@ -41,6 +44,7 @@ public class WonkyBlock implements ModInitializer, ClientModInitializer {
 	public void onInitializeClient() {
 		Registry.register(Registries.PARTICLE_TYPE, id("placing_particle"), PLACING_PARTICLE);
 		ParticleFactoryRegistry.getInstance().register(PLACING_PARTICLE, new PlacingBlockParticle.Factory());
+		ModelLoadingPluginManager.registerPlugin(new WonkyBlockModelLoadingPlugin.ModelLoader(), new WonkyBlockModelLoadingPlugin());
 
 		renderer = new VanillaRendererImplementation();
 		invisibleBlocks = new BlockTracker(renderer);
@@ -56,5 +60,10 @@ public class WonkyBlock implements ModInitializer, ClientModInitializer {
 
 	public static BlockTracker getInvisibleBlocks() {
 		return invisibleBlocks;
+	}
+
+	public static BakedModel getBlockModel(BlockModels models) {
+		final BakedModelManagerAccess manager = BakedModelManagerAccess.of(models.getModelManager());
+		return manager.reallyGetModel(Identifier.of("minecraft", "block/wonky_block"));
 	}
 }
